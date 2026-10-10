@@ -1,0 +1,85 @@
+global:
+  smtp_smarthost: smtp.gmail.com:587
+  # На сервере вместо student@example.com указан личный адрес Gmail.
+  smtp_from: student@example.com
+  smtp_auth_username: student@example.com
+  smtp_auth_password_file: /etc/alertmanager/secrets/gmail_app_password
+  smtp_require_tls: true
+
+route:
+  receiver: warning-email
+  group_by: [alertname, severity]
+  group_wait: 10s
+  group_interval: 5m
+  repeat_interval: 4h
+  routes:
+    - receiver: critical-telegram
+      matchers:
+        - 'severity="critical"'
+    - receiver: warning-email
+      matchers:
+        - 'severity="warning"'
+
+receivers:
+  - name: warning-email
+    email_configs:
+      - to: student@example.com
+        send_resolved: true
+        # Тема письма: статус и название правила подставляются автоматически.
+        headers:
+          Subject: '[OTUS · ДЗ 3] {{ if eq .Status "firing" }}Предупреждение{{ else }}Восстановлено{{ end }}: {{ .GroupLabels.alertname }}'
+        # HTML отвечает за оформление письма; text служит текстовой версией.
+        html: |
+          <html lang="ru"><body style="margin:0;padding:24px;background:#f3f4f6;font-family:Arial,sans-serif;color:#1f2937;">
+          <table role="presentation" style="width:100%;max-width:600px;margin:auto;background:#ffffff;border-collapse:collapse;">
+            <tr><td style="padding:24px;background:#1e3a5f;color:#ffffff;">
+              <div style="font-size:22px;font-weight:bold;">OTUS · обучение</div>
+              <div style="margin-top:8px;">Алексей Дубаев · Домашнее задание 3</div>
+            </td></tr>
+            <tr><td style="padding:20px 24px;background:{{ if eq .Status "firing" }}#fef3c7{{ else }}#dcfce7{{ end }};font-size:18px;font-weight:bold;">
+              {{ if eq .Status "firing" }}Есть предупреждение{{ else }}Проблема устранена{{ end }}
+            </td></tr>
+            {{ range .Alerts }}
+            <tr><td style="padding:24px;border-bottom:1px solid #e5e7eb;">
+              <div style="font-size:18px;font-weight:bold;margin-bottom:16px;">{{ .Annotations.summary }}</div>
+              <div><b>Состояние:</b> {{ if eq .Status "firing" }}Проблема активна{{ else }}Восстановлено{{ end }}</div>
+              <div><b>Уровень:</b> {{ .Labels.severity }}</div>
+              <div><b>Сервис:</b> {{ .Labels.job }}</div>
+              <div><b>Цель проверки:</b> {{ .Labels.instance }}</div>
+              <div><b>Окружение:</b> {{ .Labels.site }}</div>
+              <div><b>Правило:</b> {{ .Labels.alertname }}</div>
+            </td></tr>
+            {{ end }}
+            <tr><td style="padding:16px 24px;color:#6b7280;font-size:12px;">Учебный сервер · Prometheus + Alertmanager</td></tr>
+          </table></body></html>
+        text: |
+          OTUS · обучение
+          Алексей Дубаев · Домашнее задание 3
+          {{ range .Alerts }}
+          {{ if eq .Status "firing" }}Проблема активна{{ else }}Восстановлено{{ end }}: {{ .Annotations.summary }}
+          Уровень: {{ .Labels.severity }}
+          Сервис: {{ .Labels.job }}
+          Цель проверки: {{ .Labels.instance }}
+          Окружение: {{ .Labels.site }}
+          Правило: {{ .Labels.alertname }}
+          {{ end }}
+
+  - name: critical-telegram
+    telegram_configs:
+      - bot_token_file: /etc/alertmanager/secrets/telegram_bot_token
+        chat_id_file: /etc/alertmanager/secrets/telegram_chat_id
+        send_resolved: true
+        # Простой текст позволяет передавать метки без разметки Telegram.
+        parse_mode: ""
+        message: |
+          OTUS · обучение
+          Алексей Дубаев · Домашнее задание 3
+          {{ range .Alerts }}
+          {{ if eq .Status "firing" }}🔴 Критическая проблема{{ else }}🟢 Восстановлено{{ end }}
+          {{ .Annotations.summary }}
+          Уровень: {{ .Labels.severity }}
+          Сервис: {{ .Labels.job }}
+          Цель проверки: {{ .Labels.instance }}
+          Окружение: {{ .Labels.site }}
+          Правило: {{ .Labels.alertname }}
+          {{ end }}

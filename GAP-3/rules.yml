@@ -1,0 +1,26 @@
+groups:
+  - name: gap-3-availability
+    rules:
+      - alert: ExporterDown
+        expr: up{job=~"node|nginx|php-fpm|blackbox-exporter"} == 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Экспортер {{ $labels.job }} недоступен"
+
+      - alert: MariaDBUnavailable
+        expr: up{job="mariadb"} == 0 or mysql_up{job="mariadb"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "MariaDB недоступна"
+
+      - alert: CMSUnavailable
+        expr: probe_success{job="cms-http"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Сайт WordPress недоступен по HTTP"
