@@ -1,0 +1,78 @@
+name: gap-5
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: zabbix
+      POSTGRES_USER: zabbix
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    secrets:
+      - db_password
+    volumes:
+      - zabbix_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zabbix -d zabbix"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  zabbix-server:
+    image: zabbix/zabbix-server-pgsql:alpine-7.0-latest
+    init: true
+    restart: unless-stopped
+    environment:
+      DB_SERVER_HOST: postgres
+      POSTGRES_DB: zabbix
+      POSTGRES_USER: zabbix
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    secrets:
+      - db_password
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  zabbix-web:
+    image: zabbix/zabbix-web-nginx-pgsql:alpine-7.0-latest
+    init: true
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8081:8080"
+    environment:
+      ZBX_SERVER_HOST: zabbix-server
+      DB_SERVER_HOST: postgres
+      POSTGRES_DB: zabbix
+      POSTGRES_USER: zabbix
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+      PHP_TZ: Europe/Samara
+      ZBX_SERVER_NAME: OTUS - ДЗ 5
+    secrets:
+      - db_password
+    depends_on:
+      postgres:
+        condition: service_healthy
+      zabbix-server:
+        condition: service_started
+
+  zabbix-agent:
+    image: zabbix/zabbix-agent:alpine-7.0-latest
+    init: true
+    restart: unless-stopped
+    environment:
+      ZBX_HOSTNAME: otus-lld
+      ZBX_SERVER_HOST: zabbix-server
+      ZBX_PASSIVE_ALLOW: "true"
+      ZBX_ACTIVE_ALLOW: "false"
+    volumes:
+      - ./otus_metrics.sh:/usr/local/bin/otus_metrics.sh:ro
+      - ./agent/otus.conf:/etc/zabbix/zabbix_agentd.d/otus.conf:ro
+    depends_on:
+      - zabbix-server
+
+secrets:
+  db_password:
+    file: ./secrets/db_password
+
+volumes:
+  zabbix_db_data:
