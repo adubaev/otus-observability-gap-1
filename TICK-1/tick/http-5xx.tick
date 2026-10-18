@@ -1,0 +1,30 @@
+stream
+    |from()
+        .database('telegraf')
+        .retentionPolicy('autogen')
+        .measurement('nginx_access')
+        .where(lambda: "host" == 'cms-01')
+        .groupBy('host')
+    |window()
+        .period(1m)
+        .every(10s)
+        .align()
+    |sum('http_5xx')
+        .as('errors')
+    |alert()
+        .id('tick/http-5xx/{{ index .Tags "host" }}')
+        .message('''{{ if eq .Level "OK" }}🟢 <b>ВОССТАНОВЛЕНО</b>{{ else }}🔴 <b>ПРОБЛЕМА</b>{{ end }}
+<b>ДЗ 6: Установка и настройка TICK стека</b>
+
+🖥 <b>Сервер:</b> <code>{{ index .Tags "host" | html }}</code>
+🌐 <b>Проверка:</b> ошибки HTTP 500–599
+📈 <b>Ошибок за минуту:</b> <b>{{ index .Fields "errors" }}</b>
+📝 <b>Состояние:</b> {{ if eq .Level "OK" }}окно проверки без ошибок 5xx{{ else }}nginx возвращает серверные ошибки{{ end }}
+
+📊 <a href="https://tick.adubaev.ru">Открыть Chronograf</a>''')
+        .crit(lambda: "errors" > 0)
+        .stateChangesOnly()
+        .log('/var/lib/kapacitor/alerts.log')
+        .telegram()
+            .parseMode('HTML')
+            .disableWebPagePreview()

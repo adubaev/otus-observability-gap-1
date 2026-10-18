@@ -1,0 +1,145 @@
+name: tick-1
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  influxdb:
+    image: influxdb:1.13.1
+    restart: unless-stopped
+    environment:
+      INFLUXDB_DB: telegraf
+      INFLUXDB_HTTP_AUTH_ENABLED: "true"
+      INFLUXDB_ADMIN_USER: tick-admin
+      INFLUXDB_ADMIN_PASSWORD: ${INFLUXDB_ADMIN_PASSWORD:?Задайте значение в .env}
+      INFLUXDB_WRITE_USER: telegraf
+      INFLUXDB_WRITE_USER_PASSWORD: ${TELEGRAF_PASSWORD:?Задайте значение в .env}
+      INFLUXDB_HTTP_SHARED_SECRET: ${INFLUXDB_SHARED_SECRET:?Задайте значение в .env}
+    ports:
+      - "127.0.0.1:8086:8086"
+    volumes:
+      - influxdb_data:/var/lib/influxdb
+      - ./influxdb.conf:/etc/influxdb/influxdb.conf:ro
+      - ./initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - influx -host 127.0.0.1 -username tick-admin -password "$$INFLUXDB_ADMIN_PASSWORD" -execute 'SHOW RETENTION POLICIES ON "telegraf"' >/dev/null
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    logging: *logging
+
+  telegraf:
+    image: telegraf:1.40.2
+    restart: unless-stopped
+    user: "0:0"
+    entrypoint: ["telegraf"]
+    command: ["--config", "/etc/telegraf/telegraf.conf"]
+    network_mode: host
+    pid: host
+    environment:
+      INFLUXDB_PASSWORD: ${TELEGRAF_PASSWORD:?Задайте значение в .env}
+      HOST_ETC: /hostfs/etc
+      HOST_PROC: /hostfs/proc
+      HOST_SYS: /hostfs/sys
+      HOST_VAR: /hostfs/var
+      HOST_RUN: /hostfs/run
+      HOST_MOUNT_PREFIX: /hostfs
+    volumes:
+      - /:/hostfs:ro,rslave
+      - ./telegraf.conf:/etc/telegraf/telegraf.conf:ro
+    depends_on:
+      influxdb:
+        condition: service_healthy
+    logging: *logging
+
+  telegraf-cms:
+    image: telegraf:1.40.2
+    restart: unless-stopped
+    entrypoint: ["telegraf"]
+    command: ["--config", "/etc/telegraf/telegraf.conf"]
+    environment:
+      INFLUXDB_PASSWORD: ${TELEGRAF_PASSWORD:?Задайте значение в .env}
+      MYSQL_METRICS_PASSWORD: ${MYSQL_METRICS_PASSWORD:?Задайте MYSQL_METRICS_PASSWORD в .env}
+    volumes:
+      - ./telegraf-cms.conf:/etc/telegraf/telegraf.conf:ro
+      - ./logs/nginx:/var/log/nginx-cms:ro
+    networks:
+      - default
+      - cms
+    depends_on:
+      influxdb:
+        condition: service_healthy
+    logging: *logging
+
+  kapacitor:
+    image: kapacitor:1.8.7
+    restart: unless-stopped
+    environment:
+      TZ: Europe/Samara
+      KAPACITOR_INFLUXDB_0_USERNAME: tick-admin
+      KAPACITOR_INFLUXDB_0_PASSWORD: ${INFLUXDB_ADMIN_PASSWORD:?Задайте значение в .env}
+      KAPACITOR_HTTP_SHARED_SECRET: ${INFLUXDB_SHARED_SECRET:?Задайте значение в .env}
+      KAPACITOR_TELEGRAM_ENABLED: ${TELEGRAM_ENABLED:-false}
+      KAPACITOR_TELEGRAM_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+    ports:
+      - "127.0.0.1:9092:9092"
+    volumes:
+      - kapacitor_data:/var/lib/kapacitor
+      - ./kapacitor.conf:/etc/kapacitor/kapacitor.conf:ro
+      - ./tick:/etc/kapacitor/tick:ro
+    depends_on:
+      influxdb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "kapacitor", "list", "tasks"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    logging: *logging
+
+  chronograf:
+    image: chronograf:1.11.5
+    restart: unless-stopped
+    environment:
+      INFLUXDB_URL: http://influxdb:8086
+      INFLUXDB_USERNAME: tick-admin
+      INFLUXDB_PASSWORD: ${INFLUXDB_ADMIN_PASSWORD:?Задайте значение в .env}
+      KAPACITOR_URL: http://kapacitor:9092
+    ports:
+      - "127.0.0.1:8888:8888"
+    volumes:
+      - chronograf_data:/var/lib/chronograf
+    networks:
+      default:
+      cms:
+        aliases:
+          - tick-chronograf
+    depends_on:
+      influxdb:
+        condition: service_healthy
+      kapacitor:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://127.0.0.1:8888/"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    logging: *logging
+
+networks:
+  cms:
+    external: true
+    name: gap-1_default
+
+volumes:
+  influxdb_data:
+  kapacitor_data:
+  chronograf_data:

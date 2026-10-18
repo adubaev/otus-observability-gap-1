@@ -1,0 +1,38 @@
+# Секреты во всех каталогах проекта
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+secrets/
+.secrets/
+*.pem
+*.key
+*.p12
+*.pfx
+*.p8
+*.keystore
+*.jks
+*.htpasswd
+.htpasswd
+id_rsa
+id_rsa.*
+id_ecdsa
+id_ecdsa.*
+id_ed25519
+id_ed25519.*
+
+# Данные и журналы работающих сервисов
+data/
+logs/
+*.log
+*.sqlite
+*.sqlite3
+*.db
+*.dump
+*.sql.gz
+
+# Локальные материалы
+*.pdf
+Домашнее задание 1.md
+.DS_Store

@@ -1,0 +1,23 @@
+stream
+    |from()
+        .database('telegraf')
+        .retentionPolicy('autogen')
+        .measurement('mysql')
+        .where(lambda: "host" == 'cms-01')
+        .groupBy('host')
+    |deadman(0.0, 1m)
+        .id('tick/database/{{ index .Tags "host" }}')
+        .message('''{{ if eq .Level "OK" }}🟢 <b>ВОССТАНОВЛЕНО</b>{{ else }}🔴 <b>ПРОБЛЕМА</b>{{ end }}
+<b>ДЗ 6: Установка и настройка TICK стека</b>
+
+🖥 <b>Сервер:</b> <code>{{ index .Tags "host" | html }}</code>
+📌 <b>Компонент:</b> База данных
+📝 <b>Состояние:</b> {{ if eq .Level "OK" }}метрики снова поступают{{ else }}метрики не поступают{{ end }}
+⏱ <b>Интервал проверки:</b> 1 минута
+
+📊 <a href="https://tick.adubaev.ru">Открыть Chronograf</a>''')
+        .stateChangesOnly()
+        .log('/var/lib/kapacitor/alerts.log')
+        .telegram()
+            .parseMode('HTML')
+            .disableWebPagePreview()

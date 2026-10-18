@@ -1,0 +1,28 @@
+stream
+    |from()
+        .database('telegraf')
+        .retentionPolicy('autogen')
+        .measurement('mem')
+        .where(lambda: "host" == 'cms-01')
+        .groupBy('host')
+    |stateDuration(lambda: "used_percent" > 90.0)
+        .unit(1s)
+        .as('high_seconds')
+    |alert()
+        .id('tick/ram/{{ index .Tags "host" }}')
+        .message('''{{ if eq .Level "OK" }}🟢 <b>ВОССТАНОВЛЕНО</b>{{ else }}🔴 <b>ПРОБЛЕМА</b>{{ end }}
+<b>ДЗ 6: Установка и настройка TICK стека</b>
+
+🖥 <b>Сервер:</b> <code>{{ index .Tags "host" | html }}</code>
+📌 <b>Проверка:</b> Использование RAM
+📈 <b>Значение:</b> <b>{{ index .Fields "used_percent" | printf "%.1f" }}%</b>
+🎯 <b>Порог:</b> &gt; 90% непрерывно 5 минут
+📝 <b>Состояние:</b> {{ if eq .Level "OK" }}значение вернулось к норме{{ else }}порог превышен{{ end }}
+
+📊 <a href="https://tick.adubaev.ru">Открыть Chronograf</a>''')
+        .crit(lambda: "high_seconds" >= 300.0)
+        .stateChangesOnly()
+        .log('/var/lib/kapacitor/alerts.log')
+        .telegram()
+            .parseMode('HTML')
+            .disableWebPagePreview()

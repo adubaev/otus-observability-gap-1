@@ -1,0 +1,25 @@
+stream
+    |from()
+        .database('telegraf')
+        .retentionPolicy('autogen')
+        .measurement('http_response')
+        .where(lambda: "host" == 'cms-01')
+        .groupBy('host')
+    |alert()
+        .id('tick/wordpress/{{ index .Tags "host" }}')
+        .message('''{{ if eq .Level "OK" }}🟢 <b>ВОССТАНОВЛЕНО</b>{{ else }}🔴 <b>ПРОБЛЕМА</b>{{ end }}
+<b>ДЗ 6: Установка и настройка TICK стека</b>
+
+🖥 <b>Сервер:</b> <code>{{ index .Tags "host" | html }}</code>
+🌐 <b>Сервис:</b> WordPress
+📝 <b>Состояние:</b> {{ if eq .Level "OK" }}сайт снова доступен{{ else }}HTTP-проверка не проходит{{ end }}
+{{ if index .Fields "http_response_code" }}📡 <b>HTTP-ответ:</b> <code>{{ index .Fields "http_response_code" }}</code>
+{{ end }}🎯 <b>Ожидаемый ответ:</b> HTTP 200
+
+📊 <a href="https://tick.adubaev.ru">Открыть Chronograf</a>''')
+        .crit(lambda: "result_code" != 0)
+        .stateChangesOnly()
+        .log('/var/lib/kapacitor/alerts.log')
+        .telegram()
+            .parseMode('HTML')
+            .disableWebPagePreview()

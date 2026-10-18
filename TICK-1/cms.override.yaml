@@ -1,0 +1,7 @@
+# Дополнение к работающему Compose-проекту GAP-1.
+services:
+  nginx:
+    volumes:
+      - /opt/otus/TICK-1/nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - /opt/otus/TICK-1/logs/nginx:/var/log/tick
+      - /opt/otus/TICK-1/secrets/chronograf.htpasswd:/etc/nginx/tick.htpasswd:ro
