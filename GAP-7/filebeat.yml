@@ -1,0 +1,99 @@
+name: cms-01-filebeat
+tags: [otus, hw7]
+
+# Discover CMS containers by name, including after recreation or scaling.
+# Compose project labels may contain both scalar and nested values.
+filebeat.autodiscover:
+  providers:
+    - type: docker
+      host: unix:///var/run/docker.sock
+      labels.dedot: true
+      templates:
+        - condition:
+            regexp:
+              docker.container.name: '^/?gap-1-nginx-[0-9]+$'
+          config:
+            - type: filestream
+              id: cms-nginx-${data.docker.container.id}
+              paths:
+                - /var/lib/docker/containers/${data.docker.container.id}/*-json.log
+              parsers:
+                - container:
+                    format: docker
+                    stream: all
+              fields_under_root: true
+              fields:
+                service:
+                  name: nginx
+                event:
+                  dataset: nginx.log
+
+        - condition:
+            regexp:
+              docker.container.name: '^/?gap-1-wordpress-[0-9]+$'
+          config:
+            - type: filestream
+              id: cms-phpfpm-${data.docker.container.id}
+              paths:
+                - /var/lib/docker/containers/${data.docker.container.id}/*-json.log
+              parsers:
+                - container:
+                    format: docker
+                    stream: all
+              fields_under_root: true
+              fields:
+                service:
+                  name: php-fpm
+                event:
+                  dataset: php_fpm.log
+
+        - condition:
+            regexp:
+              docker.container.name: '^/?gap-1-db-[0-9]+$'
+          config:
+            - type: filestream
+              id: cms-mariadb-${data.docker.container.id}
+              paths:
+                - /var/lib/docker/containers/${data.docker.container.id}/*-json.log
+              parsers:
+                - container:
+                    format: docker
+                    stream: all
+              fields_under_root: true
+              fields:
+                service:
+                  name: mariadb
+                event:
+                  dataset: mariadb.log
+
+processors:
+  - add_fields:
+      target: host
+      fields:
+        name: cms-01
+
+# One primary shard and no replicas for the single-node lab.
+setup.template.settings:
+  index.number_of_shards: 1
+  index.number_of_replicas: 0
+  index.refresh_interval: 10s
+setup.dashboards.enabled: false
+
+queue.mem:
+  events: 256
+  flush.min_events: 64
+  flush.timeout: 5s
+
+output.elasticsearch:
+  hosts: ["https://localhost:19200"]
+  username: elastic
+  password: "${ELASTIC_PASSWORD}"
+  ssl.certificate_authorities: [/usr/share/filebeat/certs/http_ca.crt]
+  ssl.verification_mode: full
+  worker: 1
+  bulk_max_size: 64
+  compression_level: 1
+  timeout: 120
+
+logging.level: info
+logging.metrics.enabled: false

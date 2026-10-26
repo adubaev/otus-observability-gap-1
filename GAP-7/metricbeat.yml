@@ -1,0 +1,80 @@
+name: cms-01-metricbeat
+tags: [otus, hw7]
+
+# The Compose command sets --system.hostfs=/hostfs for host metrics.
+metricbeat.modules:
+  - module: system
+    period: 30s
+    metricsets: [cpu, load, memory, filesystem, fsstat, uptime]
+    cpu.metrics: [percentages, normalized_percentages]
+    filesystem.ignore_types:
+      - sysfs
+      - proc
+      - devtmpfs
+      - devpts
+      - tmpfs
+      - cgroup
+      - cgroup2
+      - overlay
+      - squashfs
+      - nsfs
+
+# Resolve current container IPs through Docker; host networking can reach them.
+metricbeat.autodiscover:
+  providers:
+    - type: docker
+      host: unix:///var/run/docker.sock
+      templates:
+        - condition:
+            regexp:
+              docker.container.name: '^/?gap-1-nginx-[0-9]+$'
+          config:
+            - module: nginx
+              metricsets: [stubstatus]
+              period: 30s
+              timeout: 10s
+              hosts: ['http://${data.host}:8080']
+              server_status_path: stub_status
+
+        - condition:
+            regexp:
+              docker.container.name: '^/?gap-1-db-[0-9]+$'
+          config:
+            - module: mysql
+              metricsets: [status]
+              period: 30s
+              timeout: 10s
+              hosts: ['tcp(${data.host}:3306)/']
+              username: beats_metrics
+              password: '${BEATS_MYSQL_PASSWORD}'
+
+processors:
+  - add_fields:
+      target: host
+      fields:
+        name: cms-01
+
+setup.template.settings:
+  index.number_of_shards: 1
+  index.number_of_replicas: 0
+  index.refresh_interval: 10s
+setup.dashboards.enabled: false
+
+queue.mem:
+  events: 256
+  flush.min_events: 64
+  flush.timeout: 5s
+
+output.elasticsearch:
+  hosts: ["https://localhost:19200"]
+  username: elastic
+  password: '${ELASTIC_PASSWORD}'
+  ssl.certificate_authorities: [/usr/share/metricbeat/certs/http_ca.crt]
+  ssl.verification_mode: full
+  worker: 1
+  bulk_max_size: 64
+  compression_level: 1
+  timeout: 120
+
+logging.level: info
+logging.metrics.enabled: false

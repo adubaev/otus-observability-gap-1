@@ -1,0 +1,49 @@
+name: elastic-01-heartbeat
+tags: [otus, hw7]
+
+heartbeat.monitors:
+  - type: http
+    id: cms-wordpress-http
+    name: WordPress HTTP
+    hosts: ['${CMS_URL}']
+    schedule: '@every 30s'
+    timeout: 15s
+    max_redirects: 3
+    check.request.method: GET
+    check.response.status: [200]
+    response.include_body: never
+
+  - type: tcp
+    id: cms-mariadb-tcp
+    name: MariaDB TCP via SSH
+    hosts: ['127.0.0.1:13306']
+    schedule: '@every 30s'
+    timeout: 10s
+    # Requiring a reply avoids treating the SSH listener alone as a healthy DB.
+    # MariaDB sends its greeting before authentication; no SQL is executed.
+    # With send only, Heartbeat requires at least one byte of response.
+    check.send: "\x00"
+
+setup.template.settings:
+  index.number_of_shards: 1
+  index.number_of_replicas: 0
+  index.refresh_interval: 10s
+
+queue.mem:
+  events: 64
+  flush.min_events: 8
+  flush.timeout: 5s
+
+output.elasticsearch:
+  hosts: ['https://localhost:9200']
+  username: elastic
+  password: '${ELASTIC_PASSWORD}'
+  ssl.certificate_authorities: [/etc/heartbeat/certs/http_ca.crt]
+  ssl.verification_mode: full
+  worker: 1
+  bulk_max_size: 16
+  compression_level: 1
+  timeout: 120
+
+logging.level: info
+logging.metrics.enabled: false
