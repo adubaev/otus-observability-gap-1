@@ -1,0 +1,31 @@
+logging {
+  level = "warn"
+}
+loki.source.file "vpn_state" {
+  targets = [{ __path__ = "/host/logs/vpn-state.jsonl", host = "vpn-nl-01", site = "nl", service = "vpn-state", environment = "project" }]
+  forward_to = [loki.process.structured.receiver]
+}
+loki.process "structured" {
+  stage.json {
+    expressions = { level = "", protocol = "", timestamp = "" }
+  }
+  stage.timestamp {
+    source = "timestamp"
+    format = "RFC3339Nano"
+  }
+  stage.labels {
+    values = { level = "", protocol = "" }
+  }
+  stage.label_drop {
+    values = ["filename"]
+  }
+  forward_to = [loki.write.central.receiver]
+}
+loki.write "central" {
+  endpoint {
+    url = "http://127.0.0.1:13100/loki/api/v1/push"
+    min_backoff_period = "1s"
+    max_backoff_period = "30s"
+    max_backoff_retries = 20
+  }
+}
