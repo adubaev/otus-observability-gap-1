@@ -1,0 +1,5 @@
+ssl: false
+serverPort: 4900
+peer_forwarder:
+  discovery_mode: static
+  static_endpoints: [127.0.0.1]

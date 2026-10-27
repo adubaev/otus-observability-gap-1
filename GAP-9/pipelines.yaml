@@ -1,0 +1,35 @@
+cms-logs:
+  source:
+    http:
+      ssl: false
+      port: 2021
+      path: /log/ingest
+  buffer:
+    bounded_blocking:
+      buffer_size: 1024
+      batch_size: 32
+  processor:
+    - grok:
+        match:
+          message:
+            - '^%{IPORHOST:client_ip} - %{DATA:remote_user} \[%{HTTPDATE:log_time}\] "%{WORD:method} %{DATA:path} HTTP/%{NUMBER:http_version}" %{INT:status} (?:%{INT:bytes}|-) "%{DATA:referrer}" "%{DATA:user_agent}"$'
+    - convert_type:
+        key: status
+        type: integer
+        convert_when: '/service_name == "nginx"'
+    - convert_type:
+        key: bytes
+        type: long
+        convert_when: '/service_name == "nginx"'
+    - add_entries:
+        entries:
+          - key: pipeline
+            value: data-prepper
+  sink:
+    - opensearch:
+        hosts: [https://opensearch:9200]
+        username: admin
+        password: ${OPENSEARCH_PASSWORD}
+        insecure: true
+        index_type: custom
+        index: hw9-cms-structured
