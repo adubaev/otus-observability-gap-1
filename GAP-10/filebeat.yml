@@ -1,0 +1,37 @@
+name: ${sidecar.nodeName}
+fields_under_root: true
+fields:
+  collector_node_id: ${sidecar.nodeName}
+  gl2_source_collector: ${sidecar.nodeId}
+filebeat.inputs:
+  - type: container
+    allow_deprecated_use: true
+    format: docker
+    stream: all
+    tail_files: true
+    id: cms-nginx
+    paths: [/host/logs/nginx/*-json.log]
+    fields: {service_name: nginx}
+    fields_under_root: true
+  - type: container
+    allow_deprecated_use: true
+    format: docker
+    stream: all
+    tail_files: true
+    id: cms-php-fpm
+    paths: [/host/logs/php-fpm/*-json.log]
+    fields: {service_name: php-fpm}
+    fields_under_root: true
+  - type: container
+    allow_deprecated_use: true
+    format: docker
+    stream: all
+    tail_files: false
+    id: cms-mariadb
+    paths: [/host/logs/mariadb/*-json.log]
+    fields: {service_name: mariadb}
+    fields_under_root: true
+output.logstash:
+  hosts: [graylog:5044]
+logging.level: warning
+logging.metrics.enabled: false

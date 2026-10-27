@@ -1,0 +1,21 @@
+cms-to-graylog:
+  source:
+    http:
+      ssl: false
+      port: 2021
+      path: /log/ingest
+  buffer:
+    bounded_blocking:
+      buffer_size: 1024
+      batch_size: 1
+  processor:
+    - add_entries:
+        entries:
+          - key: host
+            value: cms-01
+          - key: pipeline
+            value: data-prepper
+  sink:
+    - file:
+        path: /var/lib/data-prepper/events.json
+        append: true
