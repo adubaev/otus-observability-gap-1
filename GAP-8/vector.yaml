@@ -1,0 +1,43 @@
+sources:
+  beats:
+    type: logstash
+    address: 0.0.0.0:5044
+transforms:
+  parse_logs:
+    type: remap
+    inputs: [beats]
+    source: |
+      .parser = "vector-vrl"
+      if .service.name == "nginx" {
+        p, err = parse_regex(.message, r'^(?P<client_ip>\S+) - (?P<remote_user>.*?) \[(?P<log_time>[^\]]+)\] "(?P<method>\w+) (?P<path>.*?) HTTP/(?P<http_version>[\d.]+)" (?P<status>\d+) (?P<bytes>\d+|-) "(?P<referrer>.*?)" "(?P<user_agent>.*?)"$')
+        if err == null {
+          . = merge(., p)
+          .status = to_int!(p.status)
+          .bytes = to_int(p.bytes) ?? 0
+          ."@timestamp" = parse_timestamp!(p.log_time, format: "%d/%b/%Y:%H:%M:%S %z")
+          .parse_success = true
+        } else {
+          .parse_success = false
+          .tags = push(array(.tags) ?? [], "parse_failed")
+        }
+      } else if .service.name == "php-fpm" {
+        p, err = parse_regex(.message, r'^\[(?P<log_time>[^\]]+)\] (?P<level>\w+): (?P<event_text>.*)$')
+        if err == null { . = merge(., p) } else { .tags = push(array(.tags) ?? [], "parse_failed") }
+      } else if .service.name == "mariadb" {
+        p, err = parse_regex(.message, r'^(?P<log_time>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) +(?P<thread_id>\d+) \[(?P<level>\w+)\] (?P<event_text>.*)$')
+        if err == null { . = merge(., p); .thread_id = to_int!(p.thread_id) } else { .tags = push(array(.tags) ?? [], "parse_failed") }
+      }
+sinks:
+  elasticsearch:
+    type: elasticsearch
+    inputs: [parse_logs]
+    endpoints: [http://elasticsearch:9200]
+    auth:
+      strategy: basic
+      user: elastic
+      password: ${ELASTIC_PASSWORD}
+    mode: bulk
+    bulk:
+      index: hw8-vector-%Y.%m.%d
+    batch:
+      timeout_secs: 2

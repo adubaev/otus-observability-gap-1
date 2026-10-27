@@ -1,0 +1,33 @@
+name: cms-01
+filebeat.inputs:
+  - type: container
+    allow_deprecated_use: true
+    format: docker
+    stream: all
+    tail_files: true
+    id: cms-nginx
+    paths: [/host/logs/nginx/*-json.log]
+    fields: {service: {name: nginx}}
+    fields_under_root: true
+  - type: container
+    allow_deprecated_use: true
+    format: docker
+    stream: all
+    tail_files: true
+    id: cms-php-fpm
+    paths: [/host/logs/php-fpm/*-json.log]
+    fields: {service: {name: php-fpm}}
+    fields_under_root: true
+  - type: container
+    allow_deprecated_use: true
+    format: docker
+    stream: all
+    tail_files: true
+    id: cms-mariadb
+    paths: [/host/logs/mariadb/*-json.log]
+    fields: {service: {name: mariadb}}
+    fields_under_root: true
+output.logstash:
+  hosts: [ingest:5044]
+logging.level: warning
+logging.metrics.enabled: false
